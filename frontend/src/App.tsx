@@ -9,7 +9,6 @@ import {
   RefreshCw, 
   Database, 
   FileCode,
-  Info,
   Layers,
   Sparkles,
   FileCheck2,
@@ -17,7 +16,6 @@ import {
   ToggleLeft,
   ToggleRight,
   Camera,
-  Image as ImageIcon,
   UploadCloud
 } from 'lucide-react';
 

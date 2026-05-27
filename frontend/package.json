@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "vite preview --port $PORT --host"
+    "start": "npx serve -s dist"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

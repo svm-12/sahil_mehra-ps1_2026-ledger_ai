@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: #0B0F19;
+  color: #F3F4F6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars for a premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0F19;
+}
+::-webkit-scrollbar-thumb {
+  background: #22344F;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2D3E56;
+}
+
+/* Custom glassmorphism helpers */
+.glass-panel {
+  background: rgba(21, 31, 50, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(34, 52, 79, 0.6);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-card-hover:hover {
+  background: rgba(29, 45, 68, 0.85);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 0 15px 0 rgba(59, 130, 246, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Laser scan animation line */
+.laser-line {
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #3B82F6, #8B5CF6, #3B82F6, transparent);
+  box-shadow: 0 0 12px 3px rgba(59, 130, 246, 0.5);
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}

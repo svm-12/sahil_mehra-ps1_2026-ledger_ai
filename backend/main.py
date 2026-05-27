@@ -55,6 +55,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def read_root():
+    return {"status": "ok", "message": "Invoice Auditor Backend is running!"}
+
 @app.get("/status")
 def get_status():
     return {"gemini_api_key_configured": gemini_service.is_configured()}

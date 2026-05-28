@@ -213,7 +213,9 @@ function App() {
           if (res.ok) {
             latestDoc = await res.json();
           } else {
-            console.error(`Failed to extract file ${file.name}`);
+            const errData = await res.json().catch(() => ({}));
+            const errMsg = errData.detail || `Server returned ${res.status}`;
+            throw new Error(`Failed to extract ${file.name}: ${errMsg}`);
           }
         }
         await fetchDocuments(false);

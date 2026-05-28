@@ -38,6 +38,10 @@ interface Document {
   subtotal_amount: number | null;
   tax_amount: number | null;
   tip_amount: number | null;
+  misc_fees: number | null;
+  discount_amount: number | null;
+  extracted_total_amount: number | null;
+  has_math_mismatch: number | null;
   line_items: LineItem[];
   invoice_date: string | null;
   confidence_score: number | null;
@@ -71,6 +75,8 @@ function App() {
   const [subtotalAmount, setSubtotalAmount] = useState('');
   const [taxAmount, setTaxAmount] = useState('');
   const [tipAmount, setTipAmount] = useState('');
+  const [miscFees, setMiscFees] = useState('');
+  const [discountAmount, setDiscountAmount] = useState('');
   const [invoiceDate, setInvoiceDate] = useState('');
   const [confidenceScore, setConfidenceScore] = useState<number>(0);
   const [confidenceRationale, setConfidenceRationale] = useState('');
@@ -100,12 +106,18 @@ function App() {
     setSubtotalAmount(doc.subtotal_amount !== null ? String(doc.subtotal_amount) : '');
     setTaxAmount(doc.tax_amount !== null ? String(doc.tax_amount) : '');
     setTipAmount(doc.tip_amount !== null ? String(doc.tip_amount) : '');
+    setMiscFees(doc.misc_fees !== null ? String(doc.misc_fees) : '');
+    setDiscountAmount(doc.discount_amount !== null ? String(doc.discount_amount) : '');
     setInvoiceDate(doc.invoice_date || '');
     setConfidenceScore(doc.confidence_score || 0);
     setConfidenceRationale(doc.confidence_rationale || '');
     setLineItems(doc.line_items || []);
     setError(null);
     setSuccessMsg(null);
+  };
+
+  const handleDeleteLineItem = (indexToDelete: number) => {
+    setLineItems(prev => prev.filter((_, idx) => idx !== indexToDelete));
   };
 
   const fetchDocuments = async (autoSelectFirst = false) => {
@@ -247,6 +259,8 @@ function App() {
         subtotal_amount: subtotalAmount.trim() !== '' ? parseFloat(subtotalAmount) : null,
         tax_amount: taxAmount.trim() !== '' ? parseFloat(taxAmount) : null,
         tip_amount: tipAmount.trim() !== '' ? parseFloat(tipAmount) : null,
+        misc_fees: miscFees.trim() !== '' ? parseFloat(miscFees) : null,
+        discount_amount: discountAmount.trim() !== '' ? parseFloat(discountAmount) : null,
         invoice_date: invoiceDate.trim() || null,
         confidence_score: confidenceScore,
         confidence_rationale: confidenceRationale,
@@ -267,6 +281,20 @@ function App() {
       setSuccessMsg(`Document #${updatedDoc.id} audited and approved successfully!`);
     } catch (err: any) {
       setError(err.message || 'Failed to submit approved document.');
+    }
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!selectedDoc) return;
+    try {
+      setError(null);
+      const res = await fetch(`${BACKEND_URL}/documents/${selectedDoc.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete document.');
+      setDocuments(prev => prev.filter(d => d.id !== selectedDoc.id));
+      setSelectedDoc(null);
+      setSuccessMsg(`Document deleted successfully!`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete document.');
     }
   };
 
@@ -665,7 +693,7 @@ function App() {
 
                         <div className="flex flex-col items-end gap-1.5 shrink-0">
                           <span className="font-bold text-sm text-gray-100">
-                            {doc.total_amount !== null ? `$${doc.total_amount.toFixed(2)}` : '—'}
+                            {doc.total_amount !== null ? `₹${doc.total_amount.toFixed(2)}` : '—'}
                           </span>
                           
                           <span className={`text-[10px] px-2 py-0.5 font-bold rounded-full border flex items-center gap-1 ${
@@ -710,6 +738,15 @@ function App() {
                           <span>AI: {confidenceScore}%</span>
                         </div>
                       </div>
+                      
+                      {selectedDoc.has_math_mismatch === 1 && (
+                        <div className="mb-4 bg-brand-warning/10 border border-brand-warning/30 text-brand-warning rounded-xl p-3 flex items-start gap-3 animate-pulse-subtle">
+                          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                          <div className="text-sm font-medium">
+                            <strong>Math Mismatch Detected:</strong> The AI originally extracted a total of <strong>₹{(selectedDoc.extracted_total_amount || 0).toFixed(2)}</strong>, but the mathematically calculated sum of the line items + fees is <strong>₹{(selectedDoc.total_amount || 0).toFixed(2)}</strong>. The values below reflect the corrected math.
+                          </div>
+                        </div>
+                      )}
 
                       <div className="flex flex-col gap-4">
                         <div className="grid grid-cols-2 gap-4">
@@ -751,6 +788,7 @@ function App() {
                                   <th className="px-3 py-2 font-semibold w-16 text-right">Qty</th>
                                   <th className="px-3 py-2 font-semibold w-20 text-right">Unit</th>
                                   <th className="px-3 py-2 font-semibold w-20 text-right">Total</th>
+                                  <th className="px-3 py-2 font-semibold w-10 text-center"></th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-dark-border/50">
@@ -758,13 +796,23 @@ function App() {
                                   <tr key={idx} className="hover:bg-dark-hover/30">
                                     <td className="px-3 py-2 truncate max-w-[120px]">{item.description}</td>
                                     <td className="px-3 py-2 text-right">{item.quantity || '-'}</td>
-                                    <td className="px-3 py-2 text-right">${item.unit_price?.toFixed(2) || '-'}</td>
-                                    <td className="px-3 py-2 text-right font-semibold">${item.total_price?.toFixed(2) || '-'}</td>
+                                    <td className="px-3 py-2 text-right">₹{item.unit_price?.toFixed(2) || '-'}</td>
+                                    <td className="px-3 py-2 text-right font-semibold">₹{item.total_price?.toFixed(2) || '-'}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      <button 
+                                        type="button" 
+                                        onClick={() => handleDeleteLineItem(idx)}
+                                        className="text-gray-500 hover:text-brand-danger transition-colors p-1"
+                                        title="Delete Item"
+                                      >
+                                        ×
+                                      </button>
+                                    </td>
                                   </tr>
                                 ))}
                                 {(!lineItems || lineItems.length === 0) && (
                                   <tr>
-                                    <td colSpan={4} className="px-3 py-4 text-center text-gray-500">No line items extracted.</td>
+                                    <td colSpan={5} className="px-3 py-4 text-center text-gray-500">No line items extracted.</td>
                                   </tr>
                                 )}
                               </tbody>
@@ -775,7 +823,7 @@ function App() {
                         <div className="grid grid-cols-2 gap-4 mt-2 p-4 bg-dark-bg/40 border border-dark-border rounded-xl">
                           <div>
                             <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
-                              Subtotal ($)
+                              Subtotal (₹)
                             </label>
                             <input
                               type="number"
@@ -787,7 +835,7 @@ function App() {
                           </div>
                           <div>
                             <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
-                              Tax ($)
+                              Tax (₹)
                             </label>
                             <input
                               type="number"
@@ -799,7 +847,7 @@ function App() {
                           </div>
                           <div>
                             <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
-                              Tip ($)
+                              Tip (₹)
                             </label>
                             <input
                               type="number"
@@ -810,8 +858,32 @@ function App() {
                             />
                           </div>
                           <div>
+                            <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
+                              Misc Fees (₹)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={miscFees}
+                              onChange={(e) => setMiscFees(e.target.value)}
+                              className="w-full bg-dark-bg/80 border border-dark-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-brand-warning mb-1.5 uppercase tracking-wide">
+                              Discount (₹)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={discountAmount}
+                              onChange={(e) => setDiscountAmount(e.target.value)}
+                              className="w-full bg-dark-bg/80 border border-brand-warning/30 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-warning text-brand-warning font-semibold"
+                            />
+                          </div>
+                          <div className="col-span-2 mt-2 pt-4 border-t border-dark-border">
                             <label className="block text-[11px] font-bold text-brand-secondary mb-1.5 uppercase tracking-wide">
-                              Grand Total ($)
+                              Grand Total (₹)
                             </label>
                             <input
                               type="number"
@@ -826,16 +898,22 @@ function App() {
                     </div>
 
                     <div className="pt-5 mt-5 border-t border-dark-border flex items-center justify-end gap-3 shrink-0">
+                      <button
+                        onClick={handleDeleteDocument}
+                        className="bg-transparent hover:bg-brand-danger/10 text-gray-500 hover:text-brand-danger transition-colors font-bold text-sm py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-transparent hover:border-brand-danger/30"
+                      >
+                        Delete Invoice
+                      </button>
                       {selectedDoc.status === 'Pending Review' ? (
                         <button
                           onClick={handleApprove}
-                          className="w-full bg-brand-success hover:bg-emerald-600 active:scale-95 transition-all text-white font-bold text-sm py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-brand-success/30 shadow-lg shadow-brand-success/20"
+                          className="flex-1 bg-brand-success hover:bg-emerald-600 active:scale-95 transition-all text-white font-bold text-sm py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-brand-success/30 shadow-lg shadow-brand-success/20"
                         >
                           <Save className="w-4 h-4" />
                           <span>Approve & Save</span>
                         </button>
                       ) : (
-                        <div className="w-full bg-dark-bg border border-dark-border rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-semibold text-brand-success text-center">
+                        <div className="flex-1 bg-dark-bg border border-dark-border rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-semibold text-brand-success text-center">
                           <CheckCircle2 className="w-4 h-4 shrink-0" />
                           <span>Human Audited & Locked</span>
                         </div>

@@ -13,6 +13,8 @@ class InvoiceExtraction(BaseModel):
     subtotal_amount: Optional[float] = Field(None, description="Subtotal amount before taxes and tips. Use None if not found.")
     tax_amount: Optional[float] = Field(None, description="Total tax or VAT amount. Use None if not found.")
     tip_amount: Optional[float] = Field(None, description="Total tip or gratuity amount. Use None if not found.")
+    misc_fees: Optional[float] = Field(None, description="Miscellaneous fees, transaction fees, service fees, etc. Use None if not found.")
+    discount_amount: Optional[float] = Field(None, description="Total discount applied. Use None if not found.")
     total_amount: Optional[float] = Field(None, description="Total amount due or paid, as a floating point number. Use None if not found.")
     line_items: List[LineItem] = Field(default_factory=list, description="List of individual items purchased.")
     invoice_date: Optional[str] = Field(None, description="Date of the invoice or receipt in YYYY-MM-DD format (or matching original text if not standard). Use None if not found.")
@@ -32,6 +34,10 @@ class DocumentCreate(BaseModel):
     subtotal_amount: Optional[float] = None
     tax_amount: Optional[float] = None
     tip_amount: Optional[float] = None
+    discount_amount: Optional[float] = None
+    misc_fees: Optional[float] = None
+    extracted_total_amount: Optional[float] = None
+    has_math_mismatch: Optional[bool] = None
     line_items: Optional[List[dict]] = None
     invoice_date: Optional[str] = None
     confidence_score: Optional[int] = None
@@ -44,6 +50,10 @@ class DocumentUpdate(BaseModel):
     subtotal_amount: Optional[float] = None
     tax_amount: Optional[float] = None
     tip_amount: Optional[float] = None
+    discount_amount: Optional[float] = None
+    misc_fees: Optional[float] = None
+    extracted_total_amount: Optional[float] = None
+    has_math_mismatch: Optional[bool] = None
     line_items: Optional[List[dict]] = None
     invoice_date: Optional[str] = None
     confidence_score: Optional[int] = None
@@ -58,6 +68,10 @@ class DocumentResponse(BaseModel):
     subtotal_amount: Optional[float] = None
     tax_amount: Optional[float] = None
     tip_amount: Optional[float] = None
+    discount_amount: Optional[float] = None
+    misc_fees: Optional[float] = None
+    extracted_total_amount: Optional[float] = None
+    has_math_mismatch: Optional[bool] = None
     line_items: Optional[List[dict]] = None
     invoice_date: Optional[str] = None
     confidence_score: Optional[int] = None

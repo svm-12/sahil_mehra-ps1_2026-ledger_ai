@@ -27,9 +27,11 @@ class GeminiService:
         prompt = """
         Extract the following fields from the provided invoice/receipt:
         - vendor_name (string)
-        - subtotal_amount (float)
+        - subtotal_amount (float) [Also known as Gross Amount, Gross Total, or Sum]
         - tax_amount (float)
         - tip_amount (float)
+        - discount_amount (float)
+        - misc_fees (float) [transaction fees, service fees, etc]
         - total_amount (float)
         - line_items (list of objects with description, quantity, unit_price, total_price)
         - invoice_date (string, format YYYY-MM-DD)
@@ -82,6 +84,8 @@ class GeminiService:
             subtotal_amount=total * 0.8,
             tax_amount=total * 0.1,
             tip_amount=total * 0.1,
+            discount_amount=0.0,
+            misc_fees=0.0,
             total_amount=total,
             line_items=[{"description": "Sandbox Item", "quantity": 1, "unit_price": total * 0.8, "total_price": total * 0.8}],
             invoice_date="2026-05-27",

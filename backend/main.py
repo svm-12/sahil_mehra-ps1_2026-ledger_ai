@@ -41,35 +41,7 @@ async def lifespan(app: FastAPI):
         db.rollback()
         
     try:
-        if db.query(models.Document).count() == 0:
-            seed_docs = [
-                models.Document(
-                    raw_text="Example Receipt 1: Target $45.00",
-                    vendor_name="Target",
-                    total_amount=45.00,
-                    status="Pending Review",
-                    confidence_score=95,
-                    confidence_rationale="Clear text"
-                ),
-                models.Document(
-                    raw_text="Example Receipt 2: Walmart $12.50",
-                    vendor_name="Walmart",
-                    total_amount=12.50,
-                    status="Pending Review",
-                    confidence_score=90,
-                    confidence_rationale="Clear text"
-                ),
-                models.Document(
-                    raw_text="Example Receipt 3: Starbucks $5.50",
-                    vendor_name="Starbucks",
-                    total_amount=5.50,
-                    status="Audited",
-                    confidence_score=85,
-                    confidence_rationale="Clear text"
-                )
-            ]
-            db.add_all(seed_docs)
-            db.commit()
+        pass # Database is ready
     except Exception:
         pass
     finally:

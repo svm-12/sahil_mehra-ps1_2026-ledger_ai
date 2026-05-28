@@ -71,14 +71,18 @@ def get_documents(db: Session = Depends(get_db)):
 def extract_document(req: schemas.DocumentExtractRequest, db: Session = Depends(get_db)):
     try:
         if req.sandbox:
-            extracted = gemini_service.simulate_extraction(req.raw_text, req.image_base64)
+            extracted = gemini_service.simulate_extraction(req.raw_text, req.image_base64, req.mime_type)
         else:
-            extracted = gemini_service.extract_invoice(req.raw_text, req.image_base64)
+            extracted = gemini_service.extract_invoice(req.raw_text, req.image_base64, req.mime_type)
             
         doc = models.Document(
-            raw_text=req.raw_text or "Image uploaded",
+            raw_text=req.raw_text or "Image/PDF uploaded",
             vendor_name=extracted.vendor_name,
             total_amount=extracted.total_amount,
+            subtotal_amount=extracted.subtotal_amount,
+            tax_amount=extracted.tax_amount,
+            tip_amount=extracted.tip_amount,
+            line_items=[item.model_dump() for item in extracted.line_items] if extracted.line_items else [],
             invoice_date=extracted.invoice_date,
             confidence_score=extracted.confidence_score,
             confidence_rationale=extracted.confidence_rationale,
@@ -99,6 +103,11 @@ def update_document(doc_id: int, req: schemas.DocumentUpdate, db: Session = Depe
         
     doc.vendor_name = req.vendor_name
     doc.total_amount = req.total_amount
+    doc.subtotal_amount = req.subtotal_amount
+    doc.tax_amount = req.tax_amount
+    doc.tip_amount = req.tip_amount
+    if req.line_items is not None:
+        doc.line_items = req.line_items
     doc.invoice_date = req.invoice_date
     doc.confidence_score = req.confidence_score
     doc.confidence_rationale = req.confidence_rationale

@@ -20,14 +20,18 @@ class GeminiService:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
-    def extract_invoice(self, raw_text: str = None, image_base64: str = None) -> InvoiceExtraction:
+    def extract_invoice(self, raw_text: str = None, image_base64: str = None, mime_type: str = "image/jpeg") -> InvoiceExtraction:
         if not self.is_configured():
             raise Exception("Gemini API Key is not configured.")
 
         prompt = """
         Extract the following fields from the provided invoice/receipt:
         - vendor_name (string)
+        - subtotal_amount (float)
+        - tax_amount (float)
+        - tip_amount (float)
         - total_amount (float)
+        - line_items (list of objects with description, quantity, unit_price, total_price)
         - invoice_date (string, format YYYY-MM-DD)
         - confidence_score (integer 0-100)
         - confidence_rationale (string explaining the score)
@@ -45,7 +49,7 @@ class GeminiService:
             contents.append(
                 types.Part.from_bytes(
                     data=image_bytes,
-                    mime_type="image/jpeg"
+                    mime_type=mime_type
                 )
             )
         contents.append(prompt)
@@ -65,7 +69,7 @@ class GeminiService:
         except Exception as e:
             raise Exception(f"Failed to parse Gemini response: {str(e)}")
 
-    def simulate_extraction(self, raw_text: str = None, image_base64: str = None) -> InvoiceExtraction:
+    def simulate_extraction(self, raw_text: str = None, image_base64: str = None, mime_type: str = "image/jpeg") -> InvoiceExtraction:
         text_to_search = raw_text or ""
         vendor_match = re.search(r'(?i)store|merchant|vendor\s*#?\s*([a-z0-9]+)', text_to_search)
         total_match = re.search(r'(?i)total[\s:]*\$?(\d+\.\d{2})', text_to_search)
@@ -75,7 +79,11 @@ class GeminiService:
         
         return InvoiceExtraction(
             vendor_name=vendor,
+            subtotal_amount=total * 0.8,
+            tax_amount=total * 0.1,
+            tip_amount=total * 0.1,
             total_amount=total,
+            line_items=[{"description": "Sandbox Item", "quantity": 1, "unit_price": total * 0.8, "total_price": total * 0.8}],
             invoice_date="2026-05-27",
             confidence_score=50,
             confidence_rationale="Simulated extraction using heuristic regex sandbox fallback."

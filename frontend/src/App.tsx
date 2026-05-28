@@ -16,14 +16,29 @@ import {
   ToggleLeft,
   ToggleRight,
   Camera,
-  UploadCloud
+  UploadCloud,
+  Download,
+  BarChart3,
+  Table as TableIcon
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+
+interface LineItem {
+  description: string;
+  quantity: number | null;
+  unit_price: number | null;
+  total_price: number | null;
+}
 
 interface Document {
   id: number;
   raw_text: string;
   vendor_name: string | null;
   total_amount: number | null;
+  subtotal_amount: number | null;
+  tax_amount: number | null;
+  tip_amount: number | null;
+  line_items: LineItem[];
   invoice_date: string | null;
   confidence_score: number | null;
   confidence_rationale: string | null;
@@ -38,26 +53,29 @@ function App() {
   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
-  const [rawText, setRawText] = useState('');
+  const [extractProgress, setExtractProgress] = useState({ current: 0, total: 0 });
+  
   const [showNewForm, setShowNewForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<'feed' | 'analytics'>('feed');
   
-  // Image Upload States
-  const [inputMode, setInputMode] = useState<'text' | 'image'>('text');
-  const [imageBase64, setImageBase64] = useState<string>('');
-  const [imagePreview, setImagePreview] = useState<string>('');
+  const [inputMode, setInputMode] = useState<'text' | 'file'>('text');
+  const [rawText, setRawText] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   
-  // API Status & Sandbox States
   const [apiKeyConfigured, setApiKeyConfigured] = useState<boolean | null>(null);
   const [sandboxMode, setSandboxMode] = useState<boolean>(false);
 
-  // Audit Form States
+  // Form States
   const [vendorName, setVendorName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
+  const [subtotalAmount, setSubtotalAmount] = useState('');
+  const [taxAmount, setTaxAmount] = useState('');
+  const [tipAmount, setTipAmount] = useState('');
   const [invoiceDate, setInvoiceDate] = useState('');
   const [confidenceScore, setConfidenceScore] = useState<number>(0);
   const [confidenceRationale, setConfidenceRationale] = useState('');
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
 
-  // Status/Alert States
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -79,9 +97,13 @@ function App() {
     setSelectedDoc(doc);
     setVendorName(doc.vendor_name || '');
     setTotalAmount(doc.total_amount !== null ? String(doc.total_amount) : '');
+    setSubtotalAmount(doc.subtotal_amount !== null ? String(doc.subtotal_amount) : '');
+    setTaxAmount(doc.tax_amount !== null ? String(doc.tax_amount) : '');
+    setTipAmount(doc.tip_amount !== null ? String(doc.tip_amount) : '');
     setInvoiceDate(doc.invoice_date || '');
     setConfidenceScore(doc.confidence_score || 0);
     setConfidenceRationale(doc.confidence_rationale || '');
+    setLineItems(doc.line_items || []);
     setError(null);
     setSuccessMsg(null);
   };
@@ -126,70 +148,87 @@ function App() {
   };
 
   useEffect(() => {
-    const initialize = async () => {
-      await fetchDocuments(true);
-      await checkApiStatus();
-    };
-    initialize();
+    fetchDocuments(true);
+    checkApiStatus();
   }, []);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setSelectedFiles(Array.from(e.target.files));
+    }
+  };
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      setImageBase64(base64String);
-      setImagePreview(base64String);
-    };
-    reader.readAsDataURL(file);
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleExtract = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inputMode === 'text' && !rawText.trim()) return;
-    if (inputMode === 'image' && !imageBase64) return;
+    if (inputMode === 'file' && selectedFiles.length === 0) return;
 
     try {
       setExtracting(true);
       setError(null);
       setSuccessMsg(null);
-      
-      const payload: any = { sandbox: sandboxMode };
-      if (inputMode === 'text') payload.raw_text = rawText;
-      if (inputMode === 'image') payload.image_base64 = imageBase64;
 
-      const res = await fetch(`${BACKEND_URL}/documents/extract`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || 'Structured extraction failed.');
-      }
-
-      const newDoc = await res.json();
-      
-      setRawText('');
-      setImageBase64('');
-      setImagePreview('');
-      setShowNewForm(false);
-      
-      await fetchDocuments(false);
-      handleSelectDoc(newDoc);
-      
-      if (sandboxMode) {
-        setSuccessMsg('Sandbox Mock successfully executed. Heuristic regex rules scanned structured data!');
+      if (inputMode === 'text') {
+        const payload = { sandbox: sandboxMode, raw_text: rawText };
+        const res = await fetch(`${BACKEND_URL}/documents/extract`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Structured extraction failed.');
+        const newDoc = await res.json();
+        await fetchDocuments(false);
+        handleSelectDoc(newDoc);
+        setSuccessMsg('AI successfully extracted structured data!');
       } else {
-        setSuccessMsg('AI successfully extracted structured data with high-fidelity Gemini schema!');
+        // Bulk Upload processing
+        setExtractProgress({ current: 0, total: selectedFiles.length });
+        let latestDoc = null;
+        for (let i = 0; i < selectedFiles.length; i++) {
+          setExtractProgress({ current: i + 1, total: selectedFiles.length });
+          const file = selectedFiles[i];
+          const base64 = await fileToBase64(file);
+          
+          const payload = { 
+            sandbox: sandboxMode, 
+            image_base64: base64,
+            mime_type: file.type || "application/octet-stream"
+          };
+          
+          const res = await fetch(`${BACKEND_URL}/documents/extract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          
+          if (res.ok) {
+            latestDoc = await res.json();
+          } else {
+            console.error(`Failed to extract file ${file.name}`);
+          }
+        }
+        await fetchDocuments(false);
+        if (latestDoc) handleSelectDoc(latestDoc);
+        setSuccessMsg(`Successfully processed ${selectedFiles.length} file(s)!`);
       }
+
+      setRawText('');
+      setSelectedFiles([]);
+      setShowNewForm(false);
     } catch (err: any) {
       setError(err.message || 'AI structured extraction failed.');
     } finally {
       setExtracting(false);
+      setExtractProgress({ current: 0, total: 0 });
     }
   };
 
@@ -203,9 +242,13 @@ function App() {
       const payload = {
         vendor_name: vendorName.trim() || null,
         total_amount: totalAmount.trim() !== '' ? parseFloat(totalAmount) : null,
+        subtotal_amount: subtotalAmount.trim() !== '' ? parseFloat(subtotalAmount) : null,
+        tax_amount: taxAmount.trim() !== '' ? parseFloat(taxAmount) : null,
+        tip_amount: tipAmount.trim() !== '' ? parseFloat(tipAmount) : null,
         invoice_date: invoiceDate.trim() || null,
         confidence_score: confidenceScore,
-        confidence_rationale: confidenceRationale
+        confidence_rationale: confidenceRationale,
+        line_items: lineItems
       };
 
       const res = await fetch(`${BACKEND_URL}/documents/${selectedDoc.id}`, {
@@ -217,24 +260,62 @@ function App() {
       if (!res.ok) throw new Error('Failed to update and approve document.');
 
       const updatedDoc = await res.json();
-      
       setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
       setSelectedDoc(updatedDoc);
-      setSuccessMsg(`Document #${updatedDoc.id} audited, approved, and locked successfully!`);
+      setSuccessMsg(`Document #${updatedDoc.id} audited and approved successfully!`);
     } catch (err: any) {
       setError(err.message || 'Failed to submit approved document.');
     }
   };
 
-  const totalCount = documents.length;
-  const pendingCount = documents.filter(d => d.status === 'Pending Review').length;
-  const auditedCount = documents.filter(d => d.status === 'Audited').length;
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Vendor Name', 'Date', 'Subtotal', 'Tax', 'Tip', 'Total', 'Status', 'Confidence', 'Rationale'];
+    const rows = documents.map(d => [
+      d.id,
+      `"${d.vendor_name || ''}"`,
+      d.invoice_date || '',
+      d.subtotal_amount || '',
+      d.tax_amount || '',
+      d.tip_amount || '',
+      d.total_amount || '',
+      d.status,
+      d.confidence_score || '',
+      `"${d.confidence_rationale || ''}"`
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `invoice_audit_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const getConfidenceColor = (score: number) => {
     if (score >= 90) return 'text-brand-success bg-brand-success/10 border-brand-success/30';
     if (score >= 70) return 'text-brand-warning bg-brand-warning/10 border-brand-warning/30';
     return 'text-brand-danger bg-brand-danger/10 border-brand-danger/30';
   };
+
+  // Analytics Data Prep
+  const totalCount = documents.length;
+  const pendingCount = documents.filter(d => d.status === 'Pending Review').length;
+  const auditedCount = documents.filter(d => d.status === 'Audited').length;
+
+  const vendorSpend = documents.reduce((acc, doc) => {
+    if (doc.vendor_name && doc.total_amount) {
+      acc[doc.vendor_name] = (acc[doc.vendor_name] || 0) + doc.total_amount;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  const chartData = Object.keys(vendorSpend)
+    .map(key => ({ name: key, total: vendorSpend[key] }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
 
   return (
     <div className="min-h-screen bg-dark-bg text-gray-100 flex flex-col antialiased">
@@ -276,13 +357,19 @@ function App() {
 
           <div className="flex items-center gap-3">
             <button
+              onClick={handleExportCSV}
+              className="bg-dark-card hover:bg-dark-hover active:scale-95 transition-all text-gray-300 font-medium text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 border border-dark-border"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden md:inline">Export CSV</span>
+            </button>
+            <button
               onClick={() => setShowNewForm(!showNewForm)}
               className="bg-brand-primary hover:bg-blue-600 active:scale-95 transition-all text-white font-medium text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-brand-primary/20 border border-brand-primary/40"
             >
               <Plus className="w-4 h-4" />
               <span>Extract New Text</span>
             </button>
-
             <button
               onClick={async () => {
                 await fetchDocuments(false);
@@ -354,12 +441,12 @@ function App() {
                 </div>
                 <div className="text-center">
                   <h4 className="text-md font-bold tracking-wide text-brand-primary animate-pulse-subtle">
-                    {sandboxMode ? 'Simulating Sandbox Parsing...' : 'Gemini AI Structured Parsing...'}
+                    {sandboxMode ? 'Simulating Sandbox Parsing...' : `Extracting ${extractProgress.current} of ${extractProgress.total}...`}
                   </h4>
                   <p className="text-xs text-gray-400 mt-1">
                     {sandboxMode 
-                      ? 'Executing heuristic regex scanning to parse fields locally'
-                      : 'Invoking response_schema to isolate structured invoice fields'
+                      ? 'Executing heuristic regex scanning'
+                      : 'Invoking Gemini 1.5 Flash Multimodal Extraction'
                     }
                   </p>
                 </div>
@@ -406,15 +493,6 @@ function App() {
                 </button>
               </div>
             </div>
-
-            {apiKeyConfigured === false && (
-              <div className="bg-brand-warning/10 border border-brand-warning/30 text-brand-warning rounded-xl p-3.5 text-xs font-semibold mb-4 flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 shrink-0 mt-0.5 animate-pulse" />
-                <div>
-                  No Gemini API Key found in `backend/.env`. Sandbox Demo Mode has been **automatically activated**.
-                </div>
-              </div>
-            )}
             
             <form onSubmit={handleExtract} className="flex flex-col gap-4">
               <div className="flex items-center gap-2 mb-2 bg-dark-bg p-1 rounded-xl w-fit border border-dark-border">
@@ -430,21 +508,18 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setInputMode('image')}
+                  onClick={() => setInputMode('file')}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                    inputMode === 'image' ? 'bg-dark-card text-brand-secondary shadow' : 'text-gray-500 hover:text-gray-300'
+                    inputMode === 'file' ? 'bg-dark-card text-brand-secondary shadow' : 'text-gray-500 hover:text-gray-300'
                   }`}
                 >
                   <Camera className="w-3.5 h-3.5" />
-                  Image Scan
+                  File Upload (Image/PDF)
                 </button>
               </div>
 
               {inputMode === 'text' ? (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wide">
-                    Raw Invoice / Receipt Messy Text
-                  </label>
                   <textarea
                     required
                     value={rawText}
@@ -455,37 +530,18 @@ function App() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wide">
-                    Upload Receipt Image
+                  <label className="flex flex-col items-center justify-center h-40 cursor-pointer text-gray-400 hover:text-brand-secondary transition-all border-2 border-dashed border-dark-border rounded-xl bg-dark-bg">
+                    <UploadCloud className="w-8 h-8 mb-2" />
+                    <span className="text-sm font-semibold">Select files (Images or PDFs)</span>
+                    <span className="text-xs opacity-70 mt-1">{selectedFiles.length} file(s) selected</span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      multiple
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
                   </label>
-                  <div className="relative border-2 border-dashed border-dark-border hover:border-brand-secondary/50 rounded-xl bg-dark-bg transition-all text-center overflow-hidden">
-                    {imagePreview ? (
-                      <div className="relative w-full h-48 flex items-center justify-center bg-black/40">
-                        <img src={imagePreview} alt="Preview" className="max-h-full object-contain" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setImageBase64('');
-                            setImagePreview('');
-                          }}
-                          className="absolute top-2 right-2 bg-dark-card/80 p-1.5 rounded text-gray-300 hover:text-white"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex flex-col items-center justify-center h-40 cursor-pointer text-gray-400 hover:text-brand-secondary transition-all">
-                        <UploadCloud className="w-8 h-8 mb-2" />
-                        <span className="text-sm font-semibold">Click to browse or take a photo</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          className="hidden"
-                        />
-                      </label>
-                    )}
-                  </div>
                 </div>
               )}
 
@@ -502,187 +558,303 @@ function App() {
                   className="bg-gradient-to-r from-brand-primary to-brand-secondary text-white text-sm font-bold px-6 py-2.5 rounded-xl shadow-lg border border-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
                 >
                   <Sparkles className="w-4 h-4 animate-spin-slow" />
-                  <span>{sandboxMode ? 'Simulate Extraction' : 'Parse with Gemini'}</span>
+                  <span>{inputMode === 'file' ? `Process ${selectedFiles.length || ''} File(s)` : 'Parse with Gemini'}</span>
                 </button>
               </div>
             </form>
           </section>
         )}
 
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-4 bg-dark-card border border-dark-border rounded-2xl glass-panel overflow-hidden">
-            <div className="px-5 py-4 border-b border-dark-border flex items-center justify-between bg-dark-card/50">
-              <span className="text-sm font-bold tracking-wider uppercase text-gray-300 flex items-center gap-2">
-                <FileCode className="w-4 h-4 text-brand-primary" />
-                <span>Invoices Feed</span>
-              </span>
-              <span className="text-xs bg-dark-border px-2 py-0.5 rounded text-gray-400 font-semibold">
-                {documents.length} Records
-              </span>
+        <div className="flex border-b border-dark-border gap-6">
+          <button 
+            className={`pb-3 font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'feed' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => setActiveTab('feed')}
+          >
+            <TableIcon className="w-4 h-4" />
+            Audit Feed
+          </button>
+          <button 
+            className={`pb-3 font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'analytics' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-gray-500 hover:text-gray-300'}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Analytics Dashboard
+          </button>
+        </div>
+
+        {activeTab === 'analytics' ? (
+          <section className="bg-dark-card border border-dark-border rounded-2xl glass-panel p-6 animate-fadeIn">
+            <div className="flex items-center gap-2 mb-6 border-b border-dark-border pb-4">
+              <BarChart3 className="w-5 h-5 text-brand-primary" />
+              <h2 className="text-lg font-bold">Spend Analytics (Top Vendors)</h2>
             </div>
-
-            <div className="divide-y divide-dark-border max-h-[600px] overflow-y-auto">
-              {loading && documents.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 flex flex-col items-center gap-3">
-                  <div className="w-6 h-6 border-2 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin" />
-                  <p className="text-xs">Loading database records...</p>
-                </div>
-              ) : documents.length === 0 ? (
-                <div className="p-10 text-center text-gray-500">
-                  <p className="text-sm font-semibold">No documents found</p>
-                  <p className="text-xs text-gray-600 mt-1">Paste raw text to begin AI extraction.</p>
-                </div>
+            <div className="h-96 w-full">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                    <XAxis dataKey="name" stroke="#888" tick={{fill: '#888'}} />
+                    <YAxis stroke="#888" tick={{fill: '#888'}} />
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: '#1e1e24', borderColor: '#333', borderRadius: '12px' }}
+                      itemStyle={{ color: '#00f2fe' }}
+                    />
+                    <Bar dataKey="total" fill="#4facfe" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               ) : (
-                documents.map((doc) => {
-                  const isSelected = selectedDoc?.id === doc.id;
-                  const isPending = doc.status === 'Pending Review';
-                  return (
-                    <button
-                      key={doc.id}
-                      onClick={() => handleSelectDoc(doc)}
-                      className={`w-full text-left p-4 transition-all duration-200 flex items-center justify-between border-l-4 ${
-                        isSelected 
-                          ? 'bg-dark-hover/70 border-brand-primary' 
-                          : 'hover:bg-dark-hover/40 border-transparent'
-                      }`}
-                    >
-                      <div className="flex flex-col gap-1 pr-3 truncate">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-gray-200">
-                            {doc.vendor_name || 'Unidentified Vendor'}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <span>INV-{String(doc.id).padStart(4, '0')}</span>
-                          <span>•</span>
-                          <span>{doc.invoice_date || 'No Date'}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <span className="font-bold text-sm text-gray-100">
-                          {doc.total_amount !== null ? `$${doc.total_amount.toFixed(2)}` : '—'}
-                        </span>
-                        
-                        <span className={`text-[10px] px-2 py-0.5 font-bold rounded-full border flex items-center gap-1 ${
-                          isPending 
-                            ? 'text-brand-warning bg-brand-warning/10 border-brand-warning/20' 
-                            : 'text-brand-success bg-brand-success/10 border-brand-success/20'
-                        }`}>
-                          {doc.status}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })
+                <div className="w-full h-full flex items-center justify-center text-gray-500">
+                  Not enough data for charts yet.
+                </div>
               )}
             </div>
-          </div>
+          </section>
+        ) : (
+          <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-fadeIn">
+            <div className="lg:col-span-4 bg-dark-card border border-dark-border rounded-2xl glass-panel overflow-hidden">
+              <div className="px-5 py-4 border-b border-dark-border flex items-center justify-between bg-dark-card/50">
+                <span className="text-sm font-bold tracking-wider uppercase text-gray-300 flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-brand-primary" />
+                  <span>Invoices Feed</span>
+                </span>
+                <span className="text-xs bg-dark-border px-2 py-0.5 rounded text-gray-400 font-semibold">
+                  {documents.length} Records
+                </span>
+              </div>
 
-          <div className="lg:col-span-8">
-            {selectedDoc ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-                <div className="bg-dark-card border border-dark-border rounded-2xl glass-panel p-5 flex flex-col relative overflow-hidden">
-                  <div className="flex items-center justify-between pb-3 border-b border-dark-border mb-4">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                      <FileText className="w-3.5 h-3.5 text-brand-primary" />
-                      <span>Raw Messy Receipt Text</span>
-                    </span>
+              <div className="divide-y divide-dark-border max-h-[700px] overflow-y-auto custom-scrollbar">
+                {loading && documents.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 flex flex-col items-center gap-3">
+                    <div className="w-6 h-6 border-2 border-brand-primary/30 border-t-brand-primary rounded-full animate-spin" />
+                    <p className="text-xs">Loading database records...</p>
                   </div>
-                  <div className="flex-1 bg-dark-bg/60 border border-dark-border rounded-xl p-4 text-xs font-mono leading-relaxed overflow-auto max-h-[460px] text-gray-300 whitespace-pre-wrap">
-                    {selectedDoc.raw_text}
+                ) : documents.length === 0 ? (
+                  <div className="p-10 text-center text-gray-500">
+                    <p className="text-sm font-semibold">No documents found</p>
+                    <p className="text-xs text-gray-600 mt-1">Upload files to begin extraction.</p>
                   </div>
-                </div>
-
-                <div className="bg-dark-card border border-dark-border rounded-2xl glass-panel p-5 flex flex-col justify-between relative">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-dark-border mb-5">
-                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-brand-success" />
-                        <span>Structured Audit Form</span>
-                      </span>
-
-                      <div className={`text-xs font-bold px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${getConfidenceColor(confidenceScore)}`}>
-                        <Sparkles className="w-3 h-3" />
-                        <span>AI: {confidenceScore}%</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
-                          Vendor / Merchant Name
-                        </label>
-                        <input
-                          type="text"
-                          value={vendorName}
-                          onChange={(e) => setVendorName(e.target.value)}
-                          className="w-full bg-dark-bg/60 border border-dark-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary transition-all font-semibold"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
-                          Invoice Date
-                        </label>
-                        <input
-                          type="text"
-                          value={invoiceDate}
-                          onChange={(e) => setInvoiceDate(e.target.value)}
-                          placeholder="YYYY-MM-DD"
-                          className="w-full bg-dark-bg/60 border border-dark-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary transition-all"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
-                          Total Amount ($)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={totalAmount}
-                          onChange={(e) => setTotalAmount(e.target.value)}
-                          className="w-full bg-dark-bg/60 border border-dark-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary transition-all font-mono font-bold text-gray-100"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-6 mt-6 border-t border-dark-border flex items-center justify-end gap-3">
-                    {selectedDoc.status === 'Pending Review' ? (
+                ) : (
+                  documents.map((doc) => {
+                    const isSelected = selectedDoc?.id === doc.id;
+                    const isPending = doc.status === 'Pending Review';
+                    return (
                       <button
-                        onClick={handleApprove}
-                        className="w-full bg-brand-success hover:bg-emerald-600 active:scale-95 transition-all text-white font-bold text-sm py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-brand-success/30 shadow-lg shadow-brand-success/20"
+                        key={doc.id}
+                        onClick={() => handleSelectDoc(doc)}
+                        className={`w-full text-left p-4 transition-all duration-200 flex items-center justify-between border-l-4 ${
+                          isSelected 
+                            ? 'bg-dark-hover/70 border-brand-primary' 
+                            : 'hover:bg-dark-hover/40 border-transparent'
+                        }`}
                       >
-                        <Save className="w-4 h-4" />
-                        <span>Approve & Save</span>
+                        <div className="flex flex-col gap-1 pr-3 truncate">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-gray-200">
+                              {doc.vendor_name || 'Unidentified Vendor'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                            <span>INV-{String(doc.id).padStart(4, '0')}</span>
+                            <span>•</span>
+                            <span>{doc.invoice_date || 'No Date'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <span className="font-bold text-sm text-gray-100">
+                            {doc.total_amount !== null ? `$${doc.total_amount.toFixed(2)}` : '—'}
+                          </span>
+                          
+                          <span className={`text-[10px] px-2 py-0.5 font-bold rounded-full border flex items-center gap-1 ${
+                            isPending 
+                              ? 'text-brand-warning bg-brand-warning/10 border-brand-warning/20' 
+                              : 'text-brand-success bg-brand-success/10 border-brand-success/20'
+                          }`}>
+                            {doc.status}
+                          </span>
+                        </div>
                       </button>
-                    ) : (
-                      <div className="w-full bg-dark-bg border border-dark-border rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-semibold text-brand-success text-center">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>Human Audited & Locked</span>
-                      </div>
-                    )}
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="lg:col-span-8">
+              {selectedDoc ? (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-stretch">
+                  <div className="bg-dark-card border border-dark-border rounded-2xl glass-panel p-5 flex flex-col relative overflow-hidden">
+                    <div className="flex items-center justify-between pb-3 border-b border-dark-border mb-4">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                        <FileText className="w-3.5 h-3.5 text-brand-primary" />
+                        <span>Source Content</span>
+                      </span>
+                    </div>
+                    <div className="flex-1 bg-dark-bg/60 border border-dark-border rounded-xl p-4 text-xs font-mono leading-relaxed overflow-auto max-h-[700px] text-gray-300 whitespace-pre-wrap">
+                      {selectedDoc.raw_text}
+                    </div>
                   </div>
 
-                </div>
+                  <div className="bg-dark-card border border-dark-border rounded-2xl glass-panel p-5 flex flex-col justify-between relative max-h-[800px] overflow-auto custom-scrollbar">
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-dark-border mb-5">
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-brand-success" />
+                          <span>Structured Audit Form</span>
+                        </span>
+                        <div className={`text-xs font-bold px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${getConfidenceColor(confidenceScore)}`}>
+                          <Sparkles className="w-3 h-3" />
+                          <span>AI: {confidenceScore}%</span>
+                        </div>
+                      </div>
 
-              </div>
-            ) : (
-              <div className="bg-dark-card border border-dark-border rounded-2xl glass-panel p-16 text-center text-gray-500">
-                <FileText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-300">No Document Selected</h3>
-              </div>
-            )}
-          </div>
-        </section>
+                      <div className="flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2">
+                            <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
+                              Vendor / Merchant
+                            </label>
+                            <input
+                              type="text"
+                              value={vendorName}
+                              onChange={(e) => setVendorName(e.target.value)}
+                              className="w-full bg-dark-bg/60 border border-dark-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary transition-all font-semibold"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
+                              Invoice Date
+                            </label>
+                            <input
+                              type="text"
+                              value={invoiceDate}
+                              onChange={(e) => setInvoiceDate(e.target.value)}
+                              placeholder="YYYY-MM-DD"
+                              className="w-full bg-dark-bg/60 border border-dark-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-brand-primary transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-2">
+                          <label className="block text-[11px] font-bold text-brand-primary mb-1.5 uppercase tracking-wide flex justify-between">
+                            <span>Line Items</span>
+                            <span className="text-gray-500">{(lineItems || []).length} items</span>
+                          </label>
+                          <div className="bg-dark-bg/40 border border-dark-border rounded-xl overflow-hidden text-xs">
+                            <table className="w-full text-left">
+                              <thead className="bg-dark-bg text-gray-400">
+                                <tr>
+                                  <th className="px-3 py-2 font-semibold">Desc</th>
+                                  <th className="px-3 py-2 font-semibold w-16 text-right">Qty</th>
+                                  <th className="px-3 py-2 font-semibold w-20 text-right">Unit</th>
+                                  <th className="px-3 py-2 font-semibold w-20 text-right">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-dark-border/50">
+                                {(lineItems || []).map((item, idx) => (
+                                  <tr key={idx} className="hover:bg-dark-hover/30">
+                                    <td className="px-3 py-2 truncate max-w-[120px]">{item.description}</td>
+                                    <td className="px-3 py-2 text-right">{item.quantity || '-'}</td>
+                                    <td className="px-3 py-2 text-right">${item.unit_price?.toFixed(2) || '-'}</td>
+                                    <td className="px-3 py-2 text-right font-semibold">${item.total_price?.toFixed(2) || '-'}</td>
+                                  </tr>
+                                ))}
+                                {(!lineItems || lineItems.length === 0) && (
+                                  <tr>
+                                    <td colSpan={4} className="px-3 py-4 text-center text-gray-500">No line items extracted.</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mt-2 p-4 bg-dark-bg/40 border border-dark-border rounded-xl">
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
+                              Subtotal ($)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={subtotalAmount}
+                              onChange={(e) => setSubtotalAmount(e.target.value)}
+                              className="w-full bg-dark-bg/80 border border-dark-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
+                              Tax ($)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={taxAmount}
+                              onChange={(e) => setTaxAmount(e.target.value)}
+                              className="w-full bg-dark-bg/80 border border-dark-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide">
+                              Tip ($)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={tipAmount}
+                              onChange={(e) => setTipAmount(e.target.value)}
+                              className="w-full bg-dark-bg/80 border border-dark-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-brand-secondary mb-1.5 uppercase tracking-wide">
+                              Grand Total ($)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={totalAmount}
+                              onChange={(e) => setTotalAmount(e.target.value)}
+                              className="w-full bg-dark-card border border-brand-secondary/40 text-brand-secondary font-bold rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-secondary"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-5 mt-5 border-t border-dark-border flex items-center justify-end gap-3 shrink-0">
+                      {selectedDoc.status === 'Pending Review' ? (
+                        <button
+                          onClick={handleApprove}
+                          className="w-full bg-brand-success hover:bg-emerald-600 active:scale-95 transition-all text-white font-bold text-sm py-3 px-4 rounded-xl flex items-center justify-center gap-2 border border-brand-success/30 shadow-lg shadow-brand-success/20"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>Approve & Save</span>
+                        </button>
+                      ) : (
+                        <div className="w-full bg-dark-bg border border-dark-border rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-semibold text-brand-success text-center">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <span>Human Audited & Locked</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-dark-card border border-dark-border rounded-2xl glass-panel p-16 text-center text-gray-500">
+                  <FileText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-gray-300">No Document Selected</h3>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </main>
 
-      <footer className="border-t border-dark-border py-6 px-6 mt-12 bg-dark-bg/80 text-xs text-gray-500">
+      <footer className="border-t border-dark-border py-6 px-6 mt-auto bg-dark-bg/80 text-xs text-gray-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <p>Invoice Auditor | Sahil Mehra</p>
+          <p>Invoice Auditor | Enterprise Edition</p>
         </div>
       </footer>
     </div>

@@ -189,6 +189,15 @@ function App() {
     setLineItems(prev => prev.filter((_, idx) => idx !== indexToDelete));
   };
 
+  const handleUpdateLineItem = (index: number, field: string, value: any) => {
+    setLineItems(prev => prev.map((item, idx) => {
+      if (idx === index) {
+        return { ...item, [field]: value };
+      }
+      return item;
+    }));
+  };
+
   const fetchDocuments = async (autoSelectFirst = false, search = '') => {
     try {
       setLoading(true);
@@ -1172,11 +1181,45 @@ function App() {
                               <tbody className="divide-y divide-dark-border/50">
                                 {(lineItems || []).map((item, idx) => (
                                   <tr key={idx} className="hover:bg-dark-hover/30">
-                                    <td className="px-3 py-2 truncate max-w-[120px]">{item.description}</td>
-                                    <td className="px-3 py-2 text-right">{item.quantity || '-'}</td>
-                                    <td className="px-3 py-2 text-right">₹{item.unit_price?.toFixed(2) || '-'}</td>
-                                    <td className="px-3 py-2 text-right font-semibold">₹{item.total_price?.toFixed(2) || '-'}</td>
-                                    <td className="px-3 py-2 text-center">
+                                    <td className="px-2 py-1">
+                                      <input 
+                                        type="text"
+                                        value={item.description || ''}
+                                        onChange={(e) => handleUpdateLineItem(idx, 'description', e.target.value)}
+                                        className="w-full bg-transparent border-none text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
+                                        placeholder="Item name"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 text-right">
+                                      <input 
+                                        type="number"
+                                        value={item.quantity || ''}
+                                        onChange={(e) => handleUpdateLineItem(idx, 'quantity', parseFloat(e.target.value) || null)}
+                                        className="w-full bg-transparent border-none text-gray-100 text-right focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
+                                        placeholder="-"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 text-right flex items-center justify-end gap-0.5">
+                                      <span className="text-gray-500">₹</span>
+                                      <input 
+                                        type="number"
+                                        value={item.unit_price || ''}
+                                        onChange={(e) => handleUpdateLineItem(idx, 'unit_price', parseFloat(e.target.value) || null)}
+                                        className="w-full bg-transparent border-none text-gray-100 text-right focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
+                                        placeholder="-"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 text-right font-semibold flex items-center justify-end gap-0.5">
+                                      <span className="text-gray-500">₹</span>
+                                      <input 
+                                        type="number"
+                                        value={item.total_price || ''}
+                                        onChange={(e) => handleUpdateLineItem(idx, 'total_price', parseFloat(e.target.value) || null)}
+                                        className="w-full bg-transparent border-none text-gray-100 text-right focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
+                                        placeholder="-"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-1 text-center">
                                       <button 
                                         type="button" 
                                         onClick={() => handleDeleteLineItem(idx)}

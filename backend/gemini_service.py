@@ -131,13 +131,19 @@ class GeminiService:
             model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
-                response_mime_type="application/json",
                 tools=[{"google_search": {}}]
             )
         )
         
         try:
-            return json.loads(response.text)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            elif text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            return json.loads(text.strip())
         except Exception as e:
             raise Exception(f"Failed to parse Gemini response: {str(e)}")
 

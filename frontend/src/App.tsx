@@ -58,7 +58,7 @@ function App() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'feed' | 'analytics'>('feed');
   
-  const [inputMode, setInputMode] = useState<'text' | 'file'>('text');
+  const [inputMode, setInputMode] = useState<'text' | 'file'>('file');
   const [rawText, setRawText] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   
@@ -368,7 +368,7 @@ function App() {
               className="bg-brand-primary hover:bg-blue-600 active:scale-95 transition-all text-white font-medium text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-brand-primary/20 border border-brand-primary/40"
             >
               <Plus className="w-4 h-4" />
-              <span>Extract New Text</span>
+              <span>Upload Document</span>
             </button>
             <button
               onClick={async () => {
@@ -498,16 +498,6 @@ function App() {
               <div className="flex items-center gap-2 mb-2 bg-dark-bg p-1 rounded-xl w-fit border border-dark-border">
                 <button
                   type="button"
-                  onClick={() => setInputMode('text')}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                    inputMode === 'text' ? 'bg-dark-card text-brand-primary shadow' : 'text-gray-500 hover:text-gray-300'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  Text Paste
-                </button>
-                <button
-                  type="button"
                   onClick={() => setInputMode('file')}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                     inputMode === 'file' ? 'bg-dark-card text-brand-secondary shadow' : 'text-gray-500 hover:text-gray-300'
@@ -515,6 +505,16 @@ function App() {
                 >
                   <Camera className="w-3.5 h-3.5" />
                   File Upload (Image/PDF)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputMode('text')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                    inputMode === 'text' ? 'bg-dark-card text-brand-primary shadow' : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Text Paste
                 </button>
               </div>
 

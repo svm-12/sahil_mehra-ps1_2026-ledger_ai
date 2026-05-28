@@ -429,7 +429,7 @@ function App() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
-    doc.text('Invoice Auditor Report', 14, 20);
+    doc.text('LedgerAI Report', 14, 20);
     
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -511,7 +511,7 @@ function App() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-wide flex items-center gap-2">
-                <span>Invoice Auditor</span>
+                <span>LedgerAI</span>
                 <span className="text-xs bg-brand-primary/20 text-brand-primary font-medium px-2 py-0.5 rounded-full uppercase tracking-widest border border-brand-primary/30">
                   GenAI Workflow
                 </span>
@@ -1312,7 +1312,7 @@ function App() {
 
       <footer className="border-t border-dark-border py-6 px-6 mt-auto bg-dark-bg/80 text-xs text-gray-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <p>Invoice Auditor | Enterprise Edition</p>
+          <p>LedgerAI | Enterprise Edition</p>
         </div>
       </footer>
     </div>

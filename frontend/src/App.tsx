@@ -810,7 +810,7 @@ function App() {
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="name" stroke="#888" tick={{fill: '#888'}} />
+                        <XAxis dataKey="name" stroke="#888" tick={false} />
                         <YAxis stroke="#888" tick={{fill: '#888'}} />
                         <RechartsTooltip contentStyle={{ backgroundColor: '#1e1e24', borderColor: '#333', borderRadius: '12px' }} itemStyle={{ color: '#00f2fe' }} />
                         <Bar dataKey="total" fill="#4facfe" radius={[4, 4, 0, 0]} />
@@ -911,12 +911,12 @@ function App() {
 
 
             <div className="bg-dark-card border border-brand-primary/30 rounded-2xl glass-panel p-6">
-              <div className="flex items-center justify-between mb-6 border-b border-dark-border pb-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-dark-border pb-4">
                 <div className="flex items-center gap-2">
                   <Brain className="w-5 h-5 text-brand-primary animate-pulse" />
                   <h2 className="text-lg font-bold">AI Cost Savings Analyst</h2>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <button
                     onClick={handleSeedData}
                     className="bg-dark-card border border-dark-border hover:bg-gray-800 text-gray-300 font-bold text-sm px-4 py-2 rounded-xl transition-colors flex items-center gap-2"

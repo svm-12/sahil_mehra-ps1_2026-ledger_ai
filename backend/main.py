@@ -232,10 +232,9 @@ def create_document_manual(req: schemas.DocumentCreate, db: Session = Depends(ge
     db.refresh(doc)
     return doc
 
+from pydantic import BaseModel
 class InsightsRequest(BaseModel):
     items: list
-
-from pydantic import BaseModel
 @app.post("/analytics/insights")
 def generate_insights(req: InsightsRequest):
     try:

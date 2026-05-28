@@ -23,8 +23,13 @@ import {
   Trash2,
   Brain,
   Lightbulb,
-  ExternalLink
+  ExternalLink,
+  Search,
+  Repeat,
+  Target
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 interface LineItem {
@@ -52,6 +57,7 @@ interface Document {
   confidence_score: number | null;
   confidence_rationale: string | null;
   status: string;
+  is_subscription?: boolean;
   created_at?: string;
 }
 
@@ -66,6 +72,13 @@ function App() {
 
   const [insights, setInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [budgetGoals, setBudgetGoals] = useState<any[]>([]);
+  const [budgetCategory, setBudgetCategory] = useState('');
+  const [budgetAmount, setBudgetAmount] = useState('');
+
 
   const handleSeedData = async () => {
     try {
@@ -176,11 +189,12 @@ function App() {
     setLineItems(prev => prev.filter((_, idx) => idx !== indexToDelete));
   };
 
-  const fetchDocuments = async (autoSelectFirst = false) => {
+  const fetchDocuments = async (autoSelectFirst = false, search = '') => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`${BACKEND_URL}/documents`);
+      const url = search ? `${BACKEND_URL}/documents?search=${encodeURIComponent(search)}` : `${BACKEND_URL}/documents`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to load documents from backend.');
       const data = await res.json();
       setDocuments(data);
@@ -216,7 +230,42 @@ function App() {
   };
 
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    fetchDocuments(false, debouncedSearch);
+  }, [debouncedSearch]);
+
+  const fetchBudgets = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/budget_goals`);
+      if (res.ok) {
+        const data = await res.json();
+        setBudgetGoals(data);
+      }
+    } catch (err) {}
+  };
+
+  const handleSetBudget = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/budget_goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: budgetCategory, amount: parseFloat(budgetAmount) })
+      });
+      if (res.ok) {
+        setBudgetCategory('');
+        setBudgetAmount('');
+        fetchBudgets();
+      }
+    } catch (err) {}
+  };
+
+  useEffect(() => {
     fetchDocuments(true);
+    fetchBudgets();
     checkApiStatus();
   }, []);
 
@@ -369,31 +418,28 @@ function App() {
     }
   };
 
-  const handleExportCSV = () => {
 
-    const headers = ['ID', 'Vendor Name', 'Date', 'Subtotal', 'Tax', 'Tip', 'Total', 'Status', 'Confidence', 'Rationale'];
-    const rows = documents.map(d => [
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text('Invoice Auditor Report', 14, 22);
+    
+    const tableData = documents.map(d => [
       d.id,
-      `"${d.vendor_name || ''}"`,
-      d.invoice_date || '',
-      d.subtotal_amount || '',
-      d.tax_amount || '',
-      d.tip_amount || '',
-      d.total_amount || '',
-      d.status,
-      d.confidence_score || '',
-      `"${d.confidence_rationale || ''}"`
+      d.vendor_name || 'Unknown',
+      d.category || 'N/A',
+      d.total_amount || 0,
+      d.status || 'Pending Review',
+      d.is_subscription ? 'Yes' : 'No'
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `invoice_audit_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    autoTable(doc, {
+      startY: 30,
+      head: [['ID', 'Vendor', 'Category', 'Amount', 'Status', 'Subscription']],
+      body: tableData,
+    });
+    
+    doc.save('invoice_report.pdf');
   };
 
   const getConfidenceColor = (score: number) => {
@@ -459,11 +505,11 @@ function App() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={handleExportCSV}
+              onClick={handleExportPDF}
               className="bg-dark-card hover:bg-dark-hover active:scale-95 transition-all text-gray-300 font-medium text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 border border-dark-border"
             >
               <Download className="w-4 h-4" />
-              <span className="hidden md:inline">Export CSV</span>
+              <span className="hidden md:inline">Export PDF</span>
             </button>
             <button
               onClick={() => setShowNewForm(!showNewForm)}
@@ -765,6 +811,69 @@ function App() {
               </div>
             </div>
 
+            {/* Budget Goals Section */}
+            <div className="bg-dark-card border border-dark-border rounded-xl p-6 mt-8 mb-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Target className="w-5 h-5 text-brand-primary" />
+                <h2 className="text-lg font-bold">Budget Goals</h2>
+              </div>
+              
+              <div className="flex gap-4 mb-8">
+                <input
+                  type="text"
+                  placeholder="Category (e.g. Groceries)"
+                  value={budgetCategory}
+                  onChange={(e) => setBudgetCategory(e.target.value)}
+                  className="flex-1 bg-dark-bg border border-dark-border text-gray-100 rounded-lg px-4 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+                />
+                <input
+                  type="number"
+                  placeholder="Amount limit"
+                  value={budgetAmount}
+                  onChange={(e) => setBudgetAmount(e.target.value)}
+                  className="w-32 bg-dark-bg border border-dark-border text-gray-100 rounded-lg px-4 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+                />
+                <button
+                  onClick={handleSetBudget}
+                  className="bg-brand-primary hover:bg-brand-primary/90 text-brand-secondary font-bold text-sm px-6 py-2 rounded-lg transition-colors"
+                >
+                  Set Goal
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {budgetGoals.map((goal, idx) => {
+                  const spend = documents.filter(d => d.category?.toLowerCase() === goal.category.toLowerCase()).reduce((sum, d) => sum + (d.total_amount || 0), 0);
+                  const percentage = Math.min((spend / goal.amount) * 100, 100);
+                  const isOver = spend > goal.amount;
+                  return (
+                    <div key={idx} className="bg-dark-bg p-4 rounded-xl border border-dark-border">
+                      <div className="flex justify-between items-end mb-2">
+                        <div>
+                          <div className="font-bold text-gray-100">{goal.category}</div>
+                          <div className="text-xs text-gray-400 mt-1">{isOver ? 'Over budget!' : `${(100 - percentage).toFixed(1)}% remaining`}</div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`font-bold ${isOver ? 'text-brand-danger' : 'text-gray-100'}`}>₹{spend.toFixed(2)}</span>
+                          <span className="text-gray-500 text-sm"> / ₹{goal.amount.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${isOver ? 'bg-brand-danger' : percentage > 80 ? 'bg-brand-warning' : 'bg-brand-primary'} transition-all duration-500`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                {budgetGoals.length === 0 && (
+                  <div className="text-center text-gray-500 text-sm py-4">No budget goals set yet.</div>
+                )}
+              </div>
+            </div>
+
+
             <div className="bg-dark-card border border-brand-primary/30 rounded-2xl glass-panel p-6">
               <div className="flex items-center justify-between mb-6 border-b border-dark-border pb-4">
                 <div className="flex items-center gap-2">
@@ -845,6 +954,18 @@ function App() {
                   {documents.length} Records
                 </span>
               </div>
+              <div className="px-5 py-4 border-b border-dark-border bg-dark-bg">
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search invoices (vendor, category, etc...)"
+                    className="w-full bg-dark-card border border-dark-border text-gray-100 rounded-lg pl-10 pr-4 py-2 text-sm focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+                  />
+                </div>
+              </div>
 
               <div className="divide-y divide-dark-border max-h-[700px] overflow-y-auto custom-scrollbar">
                 {loading && documents.length === 0 ? (
@@ -906,6 +1027,11 @@ function App() {
                           }`}>
                             {doc.status}
                           </span>
+                          {doc.is_subscription && (
+                            <span className="text-[10px] px-2 py-0.5 font-bold rounded-full border flex items-center gap-1 text-purple-400 bg-purple-500/10 border-purple-500/20 mt-1">
+                              <Repeat className="w-3 h-3" /> Subscription
+                            </span>
+                          )}
                         </div>
                       </button>
                     );

@@ -27,7 +27,8 @@ class GeminiService:
         prompt = """
         Extract the following fields from the provided invoice/receipt:
         - vendor_name (string)
-        - category (string) [Broad budget category like Groceries, Office Supplies, Utilities, Software]
+        - category (string) [Broad budget category like Groceries, Office Supplies, Utilities, Software, Dining, Transport]
+        - is_subscription (boolean) [True if this appears to be a recurring subscription or SaaS payment like Netflix, Adobe, AWS, Gym, Rent, false otherwise]
         - subtotal_amount (float) [Also known as Gross Amount, Gross Total, or Sum]
         - tax_amount (float)
         - tip_amount (float)
@@ -83,6 +84,7 @@ class GeminiService:
         return InvoiceExtraction(
             vendor_name=vendor,
             category="Sandbox Category",
+            is_subscription=False,
             subtotal_amount=total * 0.8,
             tax_amount=total * 0.1,
             tip_amount=total * 0.1,

@@ -17,6 +17,7 @@ class InvoiceExtraction(BaseModel):
     misc_fees: Optional[float] = Field(None, description="Miscellaneous fees, transaction fees, service fees, etc. Use None if not found.")
     discount_amount: Optional[float] = Field(None, description="Total discount applied. Use None if not found.")
     total_amount: Optional[float] = Field(None, description="Total amount due or paid, as a floating point number. Use None if not found.")
+    is_subscription: bool = Field(False, description="True if this appears to be a recurring subscription or SaaS payment (e.g. Netflix, Adobe, AWS, Gym).")
     line_items: List[LineItem] = Field(default_factory=list, description="List of individual items purchased.")
     invoice_date: Optional[str] = Field(None, description="Date of the invoice or receipt in YYYY-MM-DD format (or matching original text if not standard). Use None if not found.")
     confidence_score: int = Field(..., description="An integer confidence score from 0 to 100 representing how reliable the extracted details are.")
@@ -44,7 +45,8 @@ class DocumentCreate(BaseModel):
     invoice_date: Optional[str] = None
     confidence_score: Optional[int] = None
     confidence_rationale: Optional[str] = None
-    status: str = "Pending Review"
+    is_subscription: Optional[bool] = False
+    status: Optional[str] = "Pending Review"
 
 class DocumentUpdate(BaseModel):
     vendor_name: Optional[str] = None
@@ -61,6 +63,7 @@ class DocumentUpdate(BaseModel):
     invoice_date: Optional[str] = None
     confidence_score: Optional[int] = None
     confidence_rationale: Optional[str] = None
+    is_subscription: Optional[bool] = None
     status: Optional[str] = Field(None, description="Current status of the document. If not provided, main.py automatically transitions it to 'Audited' upon verification.")
 
 class DocumentResponse(BaseModel):
@@ -80,12 +83,27 @@ class DocumentResponse(BaseModel):
     invoice_date: Optional[str] = None
     confidence_score: Optional[int] = None
     confidence_rationale: Optional[str] = None
+    is_subscription: Optional[bool] = False
     status: str
     created_at: datetime
 
     class Config:
         from_attributes = True
         orm_mode = True  # Supports Pydantic v1 / v2 compatibility
+
+class BudgetGoalBase(BaseModel):
+    category: str
+    amount: float
+
+class BudgetGoalCreate(BudgetGoalBase):
+    pass
+
+class BudgetGoalResponse(BudgetGoalBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+        orm_mode = True
 
 class InsightAlternative(BaseModel):
     product_name: str

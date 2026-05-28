@@ -22,4 +22,12 @@ class Document(Base):
     confidence_score = Column(Integer, nullable=True)
     confidence_rationale = Column(Text, nullable=True)
     status = Column(String, default="Pending Review", nullable=False)
+    is_subscription = Column(Integer, default=0, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class BudgetGoal(Base):
+    __tablename__ = "budget_goals"
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String, unique=True, nullable=False)
+    amount = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

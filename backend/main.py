@@ -64,6 +64,13 @@ async def lifespan(app: FastAPI):
     except Exception:
         db.rollback()
         
+
+    try:
+        db.execute(text("ALTER TABLE documents ADD COLUMN is_subscription INTEGER DEFAULT 0"))
+        db.commit()
+    except Exception:
+        db.rollback()
+
     try:
         db.execute(text("ALTER TABLE documents ADD COLUMN line_items JSON"))
         db.commit()
@@ -96,9 +103,19 @@ def read_root():
 def get_status():
     return {"gemini_api_key_configured": gemini_service.is_configured()}
 
+from sqlalchemy import or_
+
 @app.get("/documents")
-def get_documents(db: Session = Depends(get_db)):
-    return db.query(models.Document).order_by(models.Document.id.desc()).all()
+def get_documents(search: str = None, db: Session = Depends(get_db)):
+    query = db.query(models.Document)
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(or_(
+            models.Document.vendor_name.ilike(search_term),
+            models.Document.category.ilike(search_term),
+            models.Document.raw_text.ilike(search_term)
+        ))
+    return query.order_by(models.Document.id.desc()).all()
 
 @app.post("/documents/extract")
 def extract_document(req: schemas.DocumentExtractRequest, db: Session = Depends(get_db)):
@@ -133,6 +150,7 @@ def extract_document(req: schemas.DocumentExtractRequest, db: Session = Depends(
             raw_text=req.raw_text or "Image/PDF uploaded",
             vendor_name=extracted.vendor_name,
             category=extracted.category,
+            is_subscription=extracted.is_subscription,
             total_amount=total,
             subtotal_amount=subtotal,
             tax_amount=tax,
@@ -183,6 +201,7 @@ def update_document(doc_id: int, req: schemas.DocumentUpdate, db: Session = Depe
 
     doc.vendor_name = req.vendor_name if req.vendor_name is not None else doc.vendor_name
     doc.category = req.category if req.category is not None else doc.category
+    doc.is_subscription = req.is_subscription if req.is_subscription is not None else doc.is_subscription
     doc.total_amount = total
     doc.subtotal_amount = subtotal
     doc.tax_amount = tax
@@ -216,6 +235,7 @@ def create_document_manual(req: schemas.DocumentCreate, db: Session = Depends(ge
         raw_text=req.raw_text,
         vendor_name=req.vendor_name,
         category=req.category,
+        is_subscription=req.is_subscription,
         total_amount=req.total_amount,
         subtotal_amount=req.subtotal_amount,
         tax_amount=req.tax_amount,
@@ -243,12 +263,38 @@ def generate_insights(req: InsightsRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/budget_goals")
+def get_budget_goals(db: Session = Depends(get_db)):
+    return db.query(models.BudgetGoal).all()
+
+@app.post("/budget_goals")
+def create_budget_goal(req: schemas.BudgetGoalCreate, db: Session = Depends(get_db)):
+    goal = db.query(models.BudgetGoal).filter(models.BudgetGoal.category == req.category).first()
+    if goal:
+        goal.amount = req.amount
+    else:
+        goal = models.BudgetGoal(category=req.category, amount=req.amount)
+        db.add(goal)
+    db.commit()
+    db.refresh(goal)
+    return goal
+
+@app.delete("/budget_goals/{goal_id}")
+def delete_budget_goal(goal_id: int, db: Session = Depends(get_db)):
+    goal = db.query(models.BudgetGoal).filter(models.BudgetGoal.id == goal_id).first()
+    if goal:
+        db.delete(goal)
+        db.commit()
+    return {"message": "Deleted"}
+
 @app.get("/seed")
 def seed_dummy_data(db: Session = Depends(get_db)):
     dummy_docs = [
         {
             "vendor_name": "BigBasket",
             "category": "Groceries",
+            "is_subscription": 0,
             "total_amount": 1250.0,
             "subtotal_amount": 1250.0,
             "tax_amount": 0,
@@ -267,6 +313,7 @@ def seed_dummy_data(db: Session = Depends(get_db)):
         {
             "vendor_name": "Amazon India",
             "category": "Electronics",
+            "is_subscription": 0,
             "total_amount": 54990.0,
             "subtotal_amount": 54990.0,
             "tax_amount": 0,
@@ -284,6 +331,7 @@ def seed_dummy_data(db: Session = Depends(get_db)):
         {
             "vendor_name": "Zomato",
             "category": "Dining",
+            "is_subscription": 0,
             "total_amount": 1050.0,
             "subtotal_amount": 800.0,
             "tax_amount": 40.0,
@@ -299,6 +347,7 @@ def seed_dummy_data(db: Session = Depends(get_db)):
         {
             "vendor_name": "Uber",
             "category": "Transport",
+            "is_subscription": 0,
             "total_amount": 450.0,
             "subtotal_amount": 450.0,
             "tax_amount": 0,
@@ -313,6 +362,7 @@ def seed_dummy_data(db: Session = Depends(get_db)):
         {
             "vendor_name": "Adobe",
             "category": "Software",
+            "is_subscription": 1,
             "total_amount": 4230.0,
             "subtotal_amount": 4230.0,
             "tax_amount": 0,
@@ -323,6 +373,84 @@ def seed_dummy_data(db: Session = Depends(get_db)):
                 {"description": "Creative Cloud All Apps - 1 Month", "quantity": 1, "unit_price": 4230.0, "total_price": 4230.0}
             ],
             "invoice_date": "2026-05-27"
+        },
+        {
+            "vendor_name": "Netflix",
+            "category": "Software",
+            "is_subscription": 1,
+            "total_amount": 649.0,
+            "subtotal_amount": 649.0,
+            "tax_amount": 0,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Netflix Premium Plan - 1 Month", "quantity": 1, "unit_price": 649.0, "total_price": 649.0}
+            ],
+            "invoice_date": "2026-05-01"
+        },
+        {
+            "vendor_name": "AWS",
+            "category": "Software",
+            "is_subscription": 1,
+            "total_amount": 12500.0,
+            "subtotal_amount": 11000.0,
+            "tax_amount": 1500.0,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "EC2 Instances Compute", "quantity": 1, "unit_price": 8000.0, "total_price": 8000.0},
+                {"description": "RDS Database Hosting", "quantity": 1, "unit_price": 3000.0, "total_price": 3000.0}
+            ],
+            "invoice_date": "2026-05-05"
+        },
+        {
+            "vendor_name": "Blinkit",
+            "category": "Groceries",
+            "is_subscription": 0,
+            "total_amount": 320.0,
+            "subtotal_amount": 300.0,
+            "tax_amount": 0,
+            "tip_amount": 10.0,
+            "misc_fees": 10.0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Organic Whole Milk 1L", "quantity": 2, "unit_price": 85.0, "total_price": 170.0},
+                {"description": "Brown Bread", "quantity": 1, "unit_price": 50.0, "total_price": 50.0},
+                {"description": "Eggs 6 pcs", "quantity": 1, "unit_price": 80.0, "total_price": 80.0}
+            ],
+            "invoice_date": "2026-05-28"
+        },
+        {
+            "vendor_name": "BSES Rajdhani Power",
+            "category": "Utilities",
+            "is_subscription": 0,
+            "total_amount": 3450.0,
+            "subtotal_amount": 3200.0,
+            "tax_amount": 250.0,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Electricity Bill - May 2026", "quantity": 1, "unit_price": 3200.0, "total_price": 3200.0}
+            ],
+            "invoice_date": "2026-05-10"
+        },
+        {
+            "vendor_name": "Jio",
+            "category": "Utilities",
+            "is_subscription": 1,
+            "total_amount": 999.0,
+            "subtotal_amount": 846.6,
+            "tax_amount": 152.4,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "JioFiber Broadband Plan - 150Mbps", "quantity": 1, "unit_price": 846.6, "total_price": 846.6}
+            ],
+            "invoice_date": "2026-05-15"
         }
     ]
     
@@ -342,7 +470,8 @@ def seed_dummy_data(db: Session = Depends(get_db)):
             invoice_date=d["invoice_date"],
             confidence_score=100,
             confidence_rationale="Seed data for testing analytics.",
-            status="Audited"
+            status="Audited",
+            is_subscription=d["is_subscription"]
         )
         db.add(doc)
         count += 1

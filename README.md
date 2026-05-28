@@ -9,7 +9,7 @@ This application goes beyond simple expense tracking. It allows users to upload 
 ## 🚀 Live Demo
 - **Frontend URL:** *(https://frontend-production-ce76.up.railway.app/)*
 - **Backend API Docs:** *(https://backend-production-5fd2.up.railway.app/docs)*
-- **Demo Video (Loom):** *(Add your Loom link here)*
+- **Demo Video:** *(https://drive.google.com/file/d/1lL6t-ojgplkcC8cGHYZyO0gEHNMbkmaq/view?usp=sharing)*
 
 ---
 

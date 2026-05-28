@@ -109,10 +109,19 @@ def extract_document(req: schemas.DocumentExtractRequest, db: Session = Depends(
         tip = extracted.tip_amount or 0.0
         misc_fees = extracted.misc_fees or 0.0
         discount = extracted.discount_amount or 0.0
-        total = subtotal + tax + tip + misc_fees - discount
-        
+        total_exclusive = subtotal + tax + tip + misc_fees - discount
+        total_inclusive = subtotal + tip + misc_fees - discount
         extracted_total = extracted.total_amount or 0.0
-        has_mismatch = 1 if abs(extracted_total - total) > 0.01 else 0
+        
+        if abs(extracted_total - total_exclusive) <= 0.05:
+            total = total_exclusive
+            has_mismatch = 0
+        elif abs(extracted_total - total_inclusive) <= 0.05:
+            total = total_inclusive
+            has_mismatch = 0
+        else:
+            total = total_exclusive
+            has_mismatch = 1
 
         doc = models.Document(
             raw_text=req.raw_text or "Image/PDF uploaded",
@@ -151,10 +160,19 @@ def update_document(doc_id: int, req: schemas.DocumentUpdate, db: Session = Depe
     tip = req.tip_amount if req.tip_amount is not None else (doc.tip_amount or 0.0)
     misc_fees = req.misc_fees if req.misc_fees is not None else (doc.misc_fees or 0.0)
     discount = req.discount_amount if req.discount_amount is not None else (doc.discount_amount or 0.0)
-    total = subtotal + tax + tip + misc_fees - discount
-    
+    total_exclusive = subtotal + tax + tip + misc_fees - discount
+    total_inclusive = subtotal + tip + misc_fees - discount
     extracted_total = doc.extracted_total_amount or 0.0
-    has_mismatch = 1 if abs(extracted_total - total) > 0.01 else 0
+    
+    if abs(extracted_total - total_exclusive) <= 0.05:
+        total = total_exclusive
+        has_mismatch = 0
+    elif abs(extracted_total - total_inclusive) <= 0.05:
+        total = total_inclusive
+        has_mismatch = 0
+    else:
+        total = total_exclusive
+        has_mismatch = 1
 
     doc.vendor_name = req.vendor_name if req.vendor_name is not None else doc.vendor_name
     doc.total_amount = total

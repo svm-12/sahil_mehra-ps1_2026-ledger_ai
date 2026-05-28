@@ -12,6 +12,7 @@ class Document(Base):
     subtotal_amount = Column(Float, nullable=True)
     tax_amount = Column(Float, nullable=True)
     tip_amount = Column(Float, nullable=True)
+    category = Column(String, nullable=True)
     misc_fees = Column(Float, nullable=True)
     discount_amount = Column(Float, nullable=True)
     extracted_total_amount = Column(Float, nullable=True)

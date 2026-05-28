@@ -27,6 +27,7 @@ class GeminiService:
         prompt = """
         Extract the following fields from the provided invoice/receipt:
         - vendor_name (string)
+        - category (string) [Broad budget category like Groceries, Office Supplies, Utilities, Software]
         - subtotal_amount (float) [Also known as Gross Amount, Gross Total, or Sum]
         - tax_amount (float)
         - tip_amount (float)
@@ -81,6 +82,7 @@ class GeminiService:
         
         return InvoiceExtraction(
             vendor_name=vendor,
+            category="Sandbox Category",
             subtotal_amount=total * 0.8,
             tax_amount=total * 0.1,
             tip_amount=total * 0.1,
@@ -92,5 +94,51 @@ class GeminiService:
             confidence_score=50,
             confidence_rationale="Simulated extraction using heuristic regex sandbox fallback."
         )
+
+    def generate_savings_insights(self, items_to_analyze: list) -> dict:
+        if not self.is_configured():
+            raise Exception("Gemini API Key is not configured.")
+
+        prompt = f"""
+        Act as an expert financial and procurement analyst. You are provided with a list of items recently purchased:
+        {json.dumps(items_to_analyze, indent=2)}
+        
+        Using your knowledge and real-world search capability, find cheaper alternatives for these specific products. 
+        Focus on the most expensive or easily swappable items. Provide links to the competitor stores if possible.
+        
+        Return ONLY valid JSON matching this schema:
+        {{
+            "insights": [
+                {{
+                    "original_item": "...",
+                    "original_price": "...",
+                    "advice": "...",
+                    "alternatives": [
+                        {{
+                            "product_name": "...",
+                            "price": "...",
+                            "store_name": "...",
+                            "link": "..."
+                        }}
+                    ]
+                }}
+            ],
+            "summary": "Overall analysis summary..."
+        }}
+        """
+        
+        response = self.client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                tools=[{"google_search": {}}]
+            )
+        )
+        
+        try:
+            return json.loads(response.text)
+        except Exception as e:
+            raise Exception(f"Failed to parse Gemini response: {str(e)}")
 
 gemini_service = GeminiService()

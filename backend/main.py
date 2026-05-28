@@ -59,6 +59,12 @@ async def lifespan(app: FastAPI):
         db.rollback()
         
     try:
+        db.execute(text("ALTER TABLE documents ADD COLUMN category VARCHAR(255)"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        
+    try:
         db.execute(text("ALTER TABLE documents ADD COLUMN line_items JSON"))
         db.commit()
     except Exception:
@@ -126,6 +132,7 @@ def extract_document(req: schemas.DocumentExtractRequest, db: Session = Depends(
         doc = models.Document(
             raw_text=req.raw_text or "Image/PDF uploaded",
             vendor_name=extracted.vendor_name,
+            category=extracted.category,
             total_amount=total,
             subtotal_amount=subtotal,
             tax_amount=tax,
@@ -175,6 +182,7 @@ def update_document(doc_id: int, req: schemas.DocumentUpdate, db: Session = Depe
         has_mismatch = 1
 
     doc.vendor_name = req.vendor_name if req.vendor_name is not None else doc.vendor_name
+    doc.category = req.category if req.category is not None else doc.category
     doc.total_amount = total
     doc.subtotal_amount = subtotal
     doc.tax_amount = tax
@@ -201,6 +209,147 @@ def delete_document(doc_id: int, db: Session = Depends(get_db)):
     db.delete(doc)
     db.commit()
     return {"message": "Document deleted successfully"}
+
+@app.post("/documents")
+def create_document_manual(req: schemas.DocumentCreate, db: Session = Depends(get_db)):
+    doc = models.Document(
+        raw_text=req.raw_text,
+        vendor_name=req.vendor_name,
+        category=req.category,
+        total_amount=req.total_amount,
+        subtotal_amount=req.subtotal_amount,
+        tax_amount=req.tax_amount,
+        tip_amount=req.tip_amount,
+        discount_amount=req.discount_amount,
+        line_items=req.line_items or [],
+        invoice_date=req.invoice_date,
+        confidence_score=req.confidence_score or 100,
+        confidence_rationale=req.confidence_rationale or "Manually entered document.",
+        status=req.status
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+class InsightsRequest(BaseModel):
+    items: list
+
+from pydantic import BaseModel
+@app.post("/analytics/insights")
+def generate_insights(req: InsightsRequest):
+    try:
+        insights = gemini_service.generate_savings_insights(req.items)
+        return insights
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/seed")
+def seed_dummy_data(db: Session = Depends(get_db)):
+    dummy_docs = [
+        {
+            "vendor_name": "BigBasket",
+            "category": "Groceries",
+            "total_amount": 1250.0,
+            "subtotal_amount": 1250.0,
+            "tax_amount": 0,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Aashirvaad Whole Wheat Atta 5kg", "quantity": 1, "unit_price": 250.0, "total_price": 250.0},
+                {"description": "Amul Taaza Toned Milk 1L", "quantity": 2, "unit_price": 70.0, "total_price": 140.0},
+                {"description": "Maggi 2-Minute Noodles 400g", "quantity": 3, "unit_price": 60.0, "total_price": 180.0},
+                {"description": "Tata Salt 1kg", "quantity": 2, "unit_price": 28.0, "total_price": 56.0},
+                {"description": "Fortune Sunlite Sunflower Oil 1L", "quantity": 4, "unit_price": 156.0, "total_price": 624.0}
+            ],
+            "invoice_date": "2026-05-20"
+        },
+        {
+            "vendor_name": "Amazon India",
+            "category": "Electronics",
+            "total_amount": 54990.0,
+            "subtotal_amount": 54990.0,
+            "tax_amount": 0,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Sony WH-1000XM5 Wireless Headphones", "quantity": 1, "unit_price": 29990.0, "total_price": 29990.0},
+                {"description": "Logitech MX Master 3S Mouse", "quantity": 1, "unit_price": 9999.0, "total_price": 9999.0},
+                {"description": "Keychron K2 Mechanical Keyboard", "quantity": 1, "unit_price": 8499.0, "total_price": 8499.0},
+                {"description": "Anker 65W GaN Charger", "quantity": 2, "unit_price": 3251.0, "total_price": 6502.0}
+            ],
+            "invoice_date": "2026-05-22"
+        },
+        {
+            "vendor_name": "Zomato",
+            "category": "Dining",
+            "total_amount": 1050.0,
+            "subtotal_amount": 800.0,
+            "tax_amount": 40.0,
+            "tip_amount": 50.0,
+            "misc_fees": 160.0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Paneer Butter Masala", "quantity": 2, "unit_price": 280.0, "total_price": 560.0},
+                {"description": "Garlic Naan", "quantity": 4, "unit_price": 60.0, "total_price": 240.0}
+            ],
+            "invoice_date": "2026-05-25"
+        },
+        {
+            "vendor_name": "Uber",
+            "category": "Transport",
+            "total_amount": 450.0,
+            "subtotal_amount": 450.0,
+            "tax_amount": 0,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Uber Go: Airport to Home", "quantity": 1, "unit_price": 450.0, "total_price": 450.0}
+            ],
+            "invoice_date": "2026-05-26"
+        },
+        {
+            "vendor_name": "Adobe",
+            "category": "Software",
+            "total_amount": 4230.0,
+            "subtotal_amount": 4230.0,
+            "tax_amount": 0,
+            "tip_amount": 0,
+            "misc_fees": 0,
+            "discount_amount": 0,
+            "line_items": [
+                {"description": "Creative Cloud All Apps - 1 Month", "quantity": 1, "unit_price": 4230.0, "total_price": 4230.0}
+            ],
+            "invoice_date": "2026-05-27"
+        }
+    ]
+    
+    count = 0
+    for d in dummy_docs:
+        doc = models.Document(
+            raw_text="Dummy Seed Data",
+            vendor_name=d["vendor_name"],
+            category=d["category"],
+            total_amount=d["total_amount"],
+            subtotal_amount=d["subtotal_amount"],
+            tax_amount=d["tax_amount"],
+            tip_amount=d["tip_amount"],
+            misc_fees=d["misc_fees"],
+            discount_amount=d["discount_amount"],
+            line_items=d["line_items"],
+            invoice_date=d["invoice_date"],
+            confidence_score=100,
+            confidence_rationale="Seed data for testing analytics.",
+            status="Audited"
+        )
+        db.add(doc)
+        count += 1
+    
+    db.commit()
+    return {"message": f"Successfully seeded {count} dummy documents."}
 
 if __name__ == "__main__":
     import uvicorn

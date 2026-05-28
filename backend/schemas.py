@@ -10,6 +10,7 @@ class LineItem(BaseModel):
 
 class InvoiceExtraction(BaseModel):
     vendor_name: Optional[str] = Field(None, description="Name of the vendor or merchant issuing the receipt or invoice. Use None if not found.")
+    category: Optional[str] = Field(None, description="Broad budgeting category (e.g., Groceries, Software, Office Supplies, Utilities). Use None if not found.")
     subtotal_amount: Optional[float] = Field(None, description="Subtotal amount before taxes and tips. Use None if not found.")
     tax_amount: Optional[float] = Field(None, description="Total tax or VAT amount. Use None if not found.")
     tip_amount: Optional[float] = Field(None, description="Total tip or gratuity amount. Use None if not found.")
@@ -30,6 +31,7 @@ class DocumentExtractRequest(BaseModel):
 class DocumentCreate(BaseModel):
     raw_text: str
     vendor_name: Optional[str] = None
+    category: Optional[str] = None
     total_amount: Optional[float] = None
     subtotal_amount: Optional[float] = None
     tax_amount: Optional[float] = None
@@ -46,6 +48,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentUpdate(BaseModel):
     vendor_name: Optional[str] = None
+    category: Optional[str] = None
     total_amount: Optional[float] = None
     subtotal_amount: Optional[float] = None
     tax_amount: Optional[float] = None
@@ -64,6 +67,7 @@ class DocumentResponse(BaseModel):
     id: int
     raw_text: str
     vendor_name: Optional[str] = None
+    category: Optional[str] = None
     total_amount: Optional[float] = None
     subtotal_amount: Optional[float] = None
     tax_amount: Optional[float] = None
@@ -82,3 +86,19 @@ class DocumentResponse(BaseModel):
     class Config:
         from_attributes = True
         orm_mode = True  # Supports Pydantic v1 / v2 compatibility
+
+class InsightAlternative(BaseModel):
+    product_name: str
+    price: str
+    store_name: str
+    link: Optional[str] = None
+
+class CostSavingInsight(BaseModel):
+    original_item: str
+    original_price: str
+    advice: str
+    alternatives: List[InsightAlternative]
+
+class AnalyticsInsightsResponse(BaseModel):
+    insights: List[CostSavingInsight]
+    summary: str

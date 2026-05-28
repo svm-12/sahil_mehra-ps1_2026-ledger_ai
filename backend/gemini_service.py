@@ -55,7 +55,7 @@ class GeminiService:
         contents.append(prompt)
 
         response = self.client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-1.5-flash-8b',
             contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

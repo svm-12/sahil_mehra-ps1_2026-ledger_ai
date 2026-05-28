@@ -448,7 +448,7 @@ function App() {
                   <p className="text-xs text-gray-400 mt-1">
                     {sandboxMode 
                       ? 'Executing heuristic regex scanning'
-                      : 'Invoking Gemini 1.5 Flash Multimodal Extraction'
+                      : 'Invoking Gemini 2.5 Flash Multimodal Extraction'
                     }
                   </p>
                 </div>

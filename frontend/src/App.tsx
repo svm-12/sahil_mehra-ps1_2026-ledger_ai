@@ -1312,7 +1312,7 @@ function App() {
 
       <footer className="border-t border-dark-border py-6 px-6 mt-auto bg-dark-bg/80 text-xs text-gray-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <p>LedgerAI | Enterprise Edition</p>
+          <p>LedgerAI | Built by Sahil Mehra</p>
         </div>
       </footer>
     </div>

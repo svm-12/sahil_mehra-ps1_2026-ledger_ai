@@ -1199,25 +1199,29 @@ function App() {
                                         placeholder="-"
                                       />
                                     </td>
-                                    <td className="px-2 py-1 text-right flex items-center justify-end gap-0.5">
-                                      <span className="text-gray-500">₹</span>
-                                      <input 
-                                        type="number"
-                                        value={item.unit_price || ''}
-                                        onChange={(e) => handleUpdateLineItem(idx, 'unit_price', parseFloat(e.target.value) || null)}
-                                        className="w-full bg-transparent border-none text-gray-100 text-right focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
-                                        placeholder="-"
-                                      />
+                                    <td className="px-2 py-1 text-right">
+                                      <div className="flex items-center justify-end gap-0.5">
+                                        <span className="text-gray-500">₹</span>
+                                        <input 
+                                          type="number"
+                                          value={item.unit_price || ''}
+                                          onChange={(e) => handleUpdateLineItem(idx, 'unit_price', parseFloat(e.target.value) || null)}
+                                          className="w-full bg-transparent border-none text-gray-100 text-right focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
+                                          placeholder="-"
+                                        />
+                                      </div>
                                     </td>
-                                    <td className="px-2 py-1 text-right font-semibold flex items-center justify-end gap-0.5">
-                                      <span className="text-gray-500">₹</span>
-                                      <input 
-                                        type="number"
-                                        value={item.total_price || ''}
-                                        onChange={(e) => handleUpdateLineItem(idx, 'total_price', parseFloat(e.target.value) || null)}
-                                        className="w-full bg-transparent border-none text-gray-100 text-right focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
-                                        placeholder="-"
-                                      />
+                                    <td className="px-2 py-1 text-right font-semibold">
+                                      <div className="flex items-center justify-end gap-0.5">
+                                        <span className="text-gray-500">₹</span>
+                                        <input 
+                                          type="number"
+                                          value={item.total_price || ''}
+                                          onChange={(e) => handleUpdateLineItem(idx, 'total_price', parseFloat(e.target.value) || null)}
+                                          className="w-full bg-transparent border-none text-gray-100 text-right focus:outline-none focus:ring-1 focus:ring-brand-primary rounded px-1"
+                                          placeholder="-"
+                                        />
+                                      </div>
                                     </td>
                                     <td className="px-2 py-1 text-center">
                                       <button 

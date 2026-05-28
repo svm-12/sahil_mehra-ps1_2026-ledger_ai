@@ -67,6 +67,18 @@ function App() {
   const [insights, setInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
+  const handleSeedData = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/seed`);
+      if (!res.ok) throw new Error('Failed to seed data');
+      const data = await res.json();
+      setSuccessMsg(data.message);
+      fetchDocuments();
+    } catch (err: any) {
+      setError(err.message || 'Failed to seed data');
+    }
+  };
+
   const fetchInsights = async () => {
     setLoadingInsights(true);
     try {
@@ -759,14 +771,23 @@ function App() {
                   <Brain className="w-5 h-5 text-brand-primary animate-pulse" />
                   <h2 className="text-lg font-bold">AI Cost Savings Analyst</h2>
                 </div>
-                <button
-                  onClick={fetchInsights}
-                  disabled={loadingInsights}
-                  className="bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary font-bold text-sm px-4 py-2 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
-                >
-                  {loadingInsights ? <Sparkles className="w-4 h-4 animate-spin-slow" /> : <Lightbulb className="w-4 h-4" />}
-                  {loadingInsights ? 'Analyzing Web...' : 'Analyze Spending'}
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSeedData}
+                    className="bg-dark-card border border-dark-border hover:bg-gray-800 text-gray-300 font-bold text-sm px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+                  >
+                    <Database className="w-4 h-4" />
+                    Seed Test Data
+                  </button>
+                  <button
+                    onClick={fetchInsights}
+                    disabled={loadingInsights}
+                    className="bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary font-bold text-sm px-4 py-2 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {loadingInsights ? <Sparkles className="w-4 h-4 animate-spin-slow" /> : <Lightbulb className="w-4 h-4" />}
+                    {loadingInsights ? 'Analyzing Web...' : 'Analyze Spending'}
+                  </button>
+                </div>
               </div>
 
               {insights ? (

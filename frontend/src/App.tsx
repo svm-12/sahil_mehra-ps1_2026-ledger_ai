@@ -420,26 +420,62 @@ function App() {
 
 
   const handleExportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(20);
-    doc.text('Invoice Auditor Report', 14, 22);
+    const doc = new jsPDF('landscape');
     
+    // Header
+    doc.setFillColor(30, 30, 36);
+    doc.rect(0, 0, doc.internal.pageSize.width, 30, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text('Invoice Auditor Report', 14, 20);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    doc.text(`Generated: ${dateStr}`, doc.internal.pageSize.width - 14, 20, { align: 'right' });
+
+    // Summary Statistics
+    const totalSpend = documents.reduce((sum, d) => sum + (d.total_amount || 0), 0);
+    const totalTax = documents.reduce((sum, d) => sum + (d.tax_amount || 0), 0);
+    const pendingCount = documents.filter(d => d.status === 'Pending Review').length;
+    
+    doc.setTextColor(50, 50, 50);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total Records: ${documents.length}`, 14, 40);
+    doc.text(`Total Spend: Rs. ${totalSpend.toFixed(2)}`, 60, 40);
+    doc.text(`Total Tax: Rs. ${totalTax.toFixed(2)}`, 110, 40);
+    doc.text(`Pending Review: ${pendingCount}`, 160, 40);
+
     const tableData = documents.map(d => [
       d.id,
+      d.invoice_date || 'N/A',
       d.vendor_name || 'Unknown',
       d.category || 'N/A',
-      d.total_amount || 0,
+      `Rs. ${(d.total_amount || 0).toFixed(2)}`,
       d.status || 'Pending Review',
-      d.is_subscription ? 'Yes' : 'No'
+      d.is_subscription ? 'Yes' : 'No',
+      d.has_math_mismatch ? 'Mismatch' : 'OK',
+      `${d.confidence_score || 0}%`
     ]);
 
     autoTable(doc, {
-      startY: 30,
-      head: [['ID', 'Vendor', 'Category', 'Amount', 'Status', 'Subscription']],
+      startY: 48,
+      head: [['ID', 'Date', 'Vendor', 'Category', 'Total Amount', 'Status', 'Subscription', 'Math Check', 'Confidence']],
       body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      styles: { fontSize: 9, cellPadding: 4 },
+      columnStyles: {
+        4: { halign: 'right', fontStyle: 'bold' },
+        7: { textColor: [200, 50, 50] }, // Highlight mismatches slightly
+      }
     });
     
-    doc.save('invoice_report.pdf');
+    doc.save(`invoice_report_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   const getConfidenceColor = (score: number) => {
